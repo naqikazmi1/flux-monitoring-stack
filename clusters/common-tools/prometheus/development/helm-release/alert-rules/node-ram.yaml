@@ -1,0 +1,92 @@
+apiVersion: 1
+groups:
+    - orgId: 1
+      name: High RAM
+      folder: Node
+      interval: 1m
+      rules:
+        - uid: beeumul3unapsb
+          title: Nodes Ram Usage
+          condition: C
+          data:
+            - refId: A
+              relativeTimeRange:
+                from: 600
+                to: 0
+              datasourceUid: prometheus
+              model:
+                disableTextWrap: false
+                editorMode: builder
+                expr: 100 * (node_memory_MemTotal_bytes - avg_over_time(node_memory_MemAvailable_bytes[5m])) / node_memory_MemTotal_bytes
+                fullMetaSearch: false
+                includeNullMetadata: true
+                instant: true
+                intervalMs: 1000
+                legendFormat: __auto
+                maxDataPoints: 43200
+                range: false
+                refId: A
+                useBackend: false
+            - refId: B
+              datasourceUid: __expr__
+              model:
+                conditions:
+                    - evaluator:
+                        params: []
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params:
+                            - B
+                      reducer:
+                        params: []
+                        type: last
+                      type: query
+                datasource:
+                    type: __expr__
+                    uid: __expr__
+                expression: A
+                intervalMs: 1000
+                maxDataPoints: 43200
+                reducer: last
+                refId: B
+                type: reduce
+            - refId: C
+              datasourceUid: __expr__
+              model:
+                conditions:
+                    - evaluator:
+                        params:
+                            - 70
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params:
+                            - C
+                      reducer:
+                        params: []
+                        type: last
+                      type: query
+                datasource:
+                    type: __expr__
+                    uid: __expr__
+                expression: B
+                intervalMs: 1000
+                maxDataPoints: 43200
+                refId: C
+                type: threshold
+          noDataState: NoData
+          execErrState: Error
+          for: 1m
+          annotations:
+            description: |-
+                Instance {{ $labels.instance }} has been running with high RAM usage.
+                  - Threshold: 70%
+                  - Duration: More than 5 minutes
+                Please check the system for potential issues.
+            summary: 'CRITICAL: High RAM usage on instance {{ $labels.instance }}'
+          isPaused: false
+          notification_settings:
+            receiver: Slack Alerts

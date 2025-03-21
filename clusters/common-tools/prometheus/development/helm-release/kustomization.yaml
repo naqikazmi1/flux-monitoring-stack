@@ -1,0 +1,29 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: monitoring
+resources:
+  - helm-release.yaml
+configMapGenerator:
+  - name: flux-kube-state-metrics-config
+    files:
+      - kube-state-metrics-configmap.yaml
+    options:
+      labels:
+        app.kubernetes.io/part-of: flux
+        app.kubernetes.io/component: monitoring
+  - name: dashboards
+    files:
+      - dashboards/node-dashboard.json
+      - dashboards/node-dashboard-2.json
+      - dashboards/pod-dashboard.json
+      - dashboards/global-dashboard.json
+      - dashboards/logs.json
+      - alert-rules/node-cpu.yaml
+      - alert-rules/node-disk-utilisation.yaml
+      - alert-rules/node-ram.yaml
+    options:
+      labels:
+        grafana_dashboard: "1"
+        grafana_alert: "1"
+configurations:
+  - kustomizeconfig.yaml

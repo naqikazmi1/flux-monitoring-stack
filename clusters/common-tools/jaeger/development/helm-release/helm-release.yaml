@@ -1,0 +1,176 @@
+apiVersion: helm.toolkit.fluxcd.io/v2beta1
+kind: HelmRelease
+metadata:
+  name: jaeger
+  namespace: monitoring
+spec:
+  releaseName: jaeger
+  maxHistory: 3
+  interval: 1m0s
+  suspend: false
+  chart:
+    spec:
+      chart: jaeger
+      version: "3.3.4"
+      sourceRef:
+        kind: HelmRepository
+        name: jaeger-charts
+        namespace: flux-system
+  values:
+    provisionDataStore:
+      cassandra: false
+      elasticsearch: true
+      kafka: false
+    collector:
+      serviceMonitor:
+        enabled: true
+        additionalLabels: 
+          prometheusScrape: "true"
+      nodeSelector:
+        category: tools
+        affinity: multi-zones
+      resources:
+        limits:
+          memory: 2Gi
+          cpu: 500m
+        requests:
+          memory: 1Gi
+          cpu: 100m
+      service:
+        otlp:
+          grpc:
+            name: otlp-grpc
+            port: 4317
+          http:
+            name: otlp-http
+            port: 4318
+      extraEnv:
+      - name: ES_INDEX_PREFIX
+        value: stage
+    allInOne:
+      enabled: false
+    storage:
+      type: elasticsearch
+      elasticsearch:
+        scheme: http
+        host: elasticsearch-master
+        port: 9200
+        anonymous: false
+        nodesWanOnly: false
+        extraEnv:
+        - name: ES_INDEX_PREFIX
+          value: stage
+        ## ES related cmd line opts to be configured on the concerned components
+        cmdlineParams:
+          {}
+          # es.server-urls: http://elasticsearch-master:9200
+          # es.username: elastic
+          # es.index-prefix: test
+        tls:
+          enabled: false
+    elasticsearch:
+      metrics:
+        serviceMonitor:
+          enabled: true
+          labels: 
+            prometheusScrape: "true"
+      master:
+        masterOnly: false
+        replicaCount: 1
+        extraEnvVars:
+          - name: ES_JAVA_OPTS
+            value: "-Xmx3g -Xms3g"
+        persistence:
+          enabled: true
+          storageClass: gp3
+          accessModes: [ "ReadWriteOnce" ]
+          size: 30Gi
+        resources:
+          requests:
+            memory: 2Gi
+            cpu: 200m
+          limits:
+            memory: 4Gi
+            cpu: 600m
+        nodeSelector:
+          category: tools
+          affinity: single-zone
+          topology.kubernetes.io/zone: us-west-2a
+        podAnnotations:
+          sidecar.istio.io/inject: "false"
+      extraConfig:
+        cluster.max_shards_per_node: 3000
+      sysctlImage:
+        repository: bitnami/os-shell
+        tag: 12-debian-12-r18
+      volumePermissions:
+        enabled: true
+        image:
+          repository: bitnami/os-shell
+          tag: 12-debian-12-r18
+      data:
+        replicaCount: 0
+      coordinating:
+        replicaCount: 0
+      ingest:
+        replicaCount: 0        
+    schema:
+      podAnnotations:
+        sidecar.istio.io/inject: "false"
+      extraEnv:
+      - name: MODE
+        value: prod
+      - name: TRACE_TTL
+        value: "172800"
+    agent:
+      enabled: false
+      resources:
+        limits:
+          cpu: 100m
+          memory: 128Mi
+        requests:
+          cpu: 200m
+          memory: 256Mi
+    query:
+      serviceMonitor:
+        enabled: true
+        additionalLabels: 
+          prometheusScrape: "true"
+      nodeSelector:
+        category: tools
+        affinity: multi-zones
+      resources:
+        limits:
+          memory: 4Gi
+          cpu: 600m
+        requests:
+          memory: 2Gi
+          cpu: 100m
+      extraEnv:
+        - name: METRICS_STORAGE_TYPE
+          value: prometheus
+        - name: PROMETHEUS_SERVER_URL
+          value: http://kube-prometheus-stack-prometheus.monitoring.svc.cluster.local:9090
+        - name: PROMETHEUS_TLS_ENABLED
+          value: "false"
+    esIndexCleaner:
+      enabled: true
+      image:
+        repository: jaegertracing/jaeger-es-index-cleaner
+        schedule: "0 9 * * *"
+      successfulJobsHistoryLimit: 2
+      failedJobsHistoryLimit: 2
+      concurrencyPolicy: Forbid
+      resources:
+        limits:
+          cpu: 500m
+          memory: 512Mi
+        requests:
+          cpu: 256m
+          memory: 128Mi
+      numberOfDays: 3
+      podAnnotations:
+        sidecar.istio.io/inject: "false"
+      extraEnv:
+        - name: INDEX_PREFIX
+          value: stage

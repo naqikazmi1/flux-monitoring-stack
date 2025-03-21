@@ -1,0 +1,127 @@
+apiVersion: helm.toolkit.fluxcd.io/v2beta1
+kind: HelmRelease
+metadata:
+  name: kube-prometheus-stack
+  namespace: monitoring
+spec:
+  releaseName: kube-prometheus-stack
+  maxHistory: 3
+  interval: 1m0s
+  suspend: false
+  chart:
+    spec:
+      chart: kube-prometheus-stack
+      version: "68.4.4"
+      sourceRef:
+        kind: HelmRepository
+        name: prometheus-charts
+        namespace: flux-system
+  install:
+    crds: Create
+  upgrade:
+    crds: CreateReplace
+  driftDetection:
+    mode: enabled
+    ignore:
+      - paths: [ "/metadata/annotations/prometheus-operator-validated" ]
+        target:
+          kind: PrometheusRule
+  valuesFrom:
+  - kind: ConfigMap
+    name: flux-kube-state-metrics-config
+    valuesKey: kube-state-metrics-configmap.yaml
+  values:
+    prometheusOperator:
+      resources:
+        limits:
+          cpu: 200m
+          memory: 300Mi
+        requests:
+          cpu: 100m
+          memory: 300Mi
+    alertmanager:
+      enabled: false
+    defaultRules:
+      create: false
+    prometheus:
+      prometheusSpec:
+        additionalScrapeConfigs:
+          - job_name: "blackbox-http"
+            metrics_path: /probe
+            params:
+              module: [http_endpoint]
+            static_configs:
+              - targets:
+                - devopscube.com
+                - example.com
+            relabel_configs:
+              - source_labels: [__address__]
+                target_label: __param_target
+              - source_labels: [__param_target]
+                target_label: instance
+              - target_label: __address__
+                replacement: prometheus-blackbox-exporter.monitoring.svc.cluster.local:9115
+
+        retention: 72h
+        enableRemoteWriteReceiver: true
+        podMonitorNamespaceSelector: { }
+        podMonitorSelector:
+          matchLabels:
+            app.kubernetes.io/component: monitoring
+        # storageSpec:
+        #   volumeClaimTemplate:
+        #     spec:
+        #       storageClassName: gp3
+        #       accessModes: ["ReadWriteOnce"]
+        #       resources:
+        #         requests:
+        #           storage: 20Gi
+        resources:
+          requests:
+            cpu: 150m
+            memory: 400Mi
+          limits:
+            cpu: 250m
+            memory: 400Mi
+    grafana:
+      env:
+        GF_SERVER_ROOT_URL: http://kube-prometheus-stack-grafana.monitoring.svc.cluster.local:3000
+      defaultDashboardsEnabled: false
+      adminPassword: admin1234
+      alerting:
+        contactpoints.yaml:
+          apiVersion: 1
+          contactPoints:
+          - orgId: 1
+            name: Slack Alerts
+            receivers:
+              - uid: 
+                type: slack
+                settings:
+                  url:
+                disableResolveMessage: false
+      sidecar:
+        datasources:
+          isDefaultDatasource: true
+          alertmanager:
+            enabled: false
+          editable: true
+        alerts:
+          enabled: true
+          searchNamespace: ALL
+        dashboards:
+          provider:
+            allowUiUpdates: true
+      additionalDataSources:
+        - name: loki
+          label: grafana_datasource
+          labelValue: "1"
+          access: proxy
+          editable: true
+          isDefault: false
+          jsonData: {}
+          orgId: 1
+          type: loki
+          url: "http://loki-stack:3100"
+          version: 1
+
