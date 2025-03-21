@@ -103,4 +103,3 @@ Debug Flux reconciliation:
 ## Conclusion
 
 This setup ensures a robust monitoring and observability stack for Kubernetes, managed efficiently using Flux for GitOps-based automation.
->>>>>>> d54db6d (monitoring stack deployment with flux)
